@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tic-Tac-Toe vs Computer with Sound</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap');
+  body {
+    background: #f0f4f8;
+    font-family: 'Montserrat', sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    height: 100vh;
+    margin: 0;
+  }
+  .container {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 14px 32px rgb(102 126 234 / 0.25);
+    max-width: 400px;
+    width: 100%;
+    padding: 30px 25px 35px 25px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  h1 {
+    margin: 0 0 16px 0;
+    color: #3e4a89;
+    user-select:none;
+  }
+  .mode-select {
+    margin-bottom: 22px;
+    user-select:none;
+  }
+  .board {
+    display: grid;
+    grid-template-columns: repeat(3, 100px);
+    grid-template-rows: repeat(3, 100px);
+    gap: 10px;
+    margin-bottom: 25px;
+    /* Allow disabling pointer events while computer plays */
+  }
+  .board.disabled {
+    pointer-events: none;
+    user-select:none;
+  }
+  .cell {
+    background: #e9ebf7;
+    border-radius: 12px;
+    box-shadow: inset 0 4px 6px rgb(0 0 0 / 0.1);
+    font-size: 3.8rem;
+    color: #4a4a8d;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    user-select:none;
+    transition: background-color 0.3s ease;
+  }
+  .cell:hover:not(.disabled) {
+    background-color: #d1d5f0;
+  }
+  .cell.disabled {
+    cursor: default;
+    background-color: #c3c9f3;
+  }
+  .status {
+    font-size: 1.3rem;
+    margin-bottom: 18px;
+    min-height: 28px;
+    color: #444777;
+    font-weight: 600;
+    user-select:none;
+  }
+  .reset-btn {
+    background: #665eea;
+    color: white;
+    border: none;
+    padding: 12px 30px;
+    font-size: 1rem;
+    border-radius: 30px;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgb(102 94 234 / 0.6);
+    transition: background-color 0.3s ease;
+    user-select:none;
+  }
+  .reset-btn:hover {
+    background-color: #5048c6;
+  }
+  .winning-cell {
+    background-color: #9bf6ff !important;
+    color: #0c5c7d !important;
+    font-weight: 800;
+    box-shadow: 0 0 12px 4px #9bf6ffaa;
+  }
+</style>
+</head>
+<body>
+<div class="container" role="main" aria-label="Tic Tac Toe Game vs Computer">
+  <h1>Tic-Tac-Toe</h1>
+  <div class="mode-select" aria-label="Select game mode">
+    <label><input type="radio" name="mode" value="pvp" checked> Player vs Player</label>
+    &nbsp;&nbsp;&nbsp;
+    <label><input type="radio" name="mode" value="pvc"> Player vs Computer</label>
+  </div>
+  <div class="status" aria-live="polite" aria-atomic="true" id="status">Player X's turn</div>
+  <div class="board" role="grid" aria-label="Tic Tac Toe board" id="board">
+    <button class="cell" role="gridcell" aria-label="Row 1 Column 1" tabindex="0" data-index="0"></button>
+    <button class="cell" role="gridcell" aria-label="Row 1 Column 2" tabindex="0" data-index="1"></button>
+    <button class="cell" role="gridcell" aria-label="Row 1 Column 3" tabindex="0" data-index="2"></button>
+    <button class="cell" role="gridcell" aria-label="Row 2 Column 1" tabindex="0" data-index="3"></button>
+    <button class="cell" role="gridcell" aria-label="Row 2 Column 2" tabindex="0" data-index="4"></button>
+    <button class="cell" role="gridcell" aria-label="Row 2 Column 3" tabindex="0" data-index="5"></button>
+    <button class="cell" role="gridcell" aria-label="Row 3 Column 1" tabindex="0" data-index="6"></button>
+    <button class="cell" role="gridcell" aria-label="Row 3 Column 2" tabindex="0" data-index="7"></button>
+    <button class="cell" role="gridcell" aria-label="Row 3 Column 3" tabindex="0" data-index="8"></button>
+  </div>
+  <button class="reset-btn" type="button" id="resetBtn" aria-label="Restart game">Restart Game</button>
+</div>
+<audio id="sound-move" src="https://actions.google.com/sounds/v1/cartoon/pop.ogg" preload="auto"></audio>
+<audio id="sound-win" src="https://actions.google.com/sounds/v1/cartoon/concussive_hit_guitar_boing.ogg" preload="auto"></audio>
+<audio id="sound-draw" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg" preload="auto"></audio>
+<script>
+  (function(){
+    const statusEl = document.getElementById('status');
+    const resetBtn = document.getElementById('resetBtn');
+    const cells = Array.from(document.querySelectorAll('.cell'));
+    const modeRadios = document.querySelectorAll('input[name="mode"]');
+    const boardEl = document.getElementById('board');
+    const soundMove = document.getElementById('sound-move');
+    const soundWin = document.getElementById('sound-win');
+    const soundDraw = document.getElementById('sound-draw');
+
+    let board = ["", "", "", "", "", "", "", "", ""];
+    let currentPlayer = "X";
+    let running = true;
+    let vsComputer = false;
+    let computerThinking = false;
+
+    const winCombinations = [
+      [0,1,2], [3,4,5], [6,7,8], // Rows
+      [0,3,6], [1,4,7], [2,5,8], // Columns
+      [0,4,8], [2,4,6]           // Diagonals
+    ];
+
+    function updateStatus(message) {
+      statusEl.textContent = message;
+    }
+
+    function playSound(sound) {
+      try {
+        sound.currentTime = 0;
+        sound.play();
+      } catch(e) {
+        // Ignore play errors (e.g. if user hasn't interacted yet)
+      }
+    }
+
+    function handleCellClick(e) {
+      if (!running || computerThinking) return;
+      const cell = e.target;
+      const idx = Number(cell.getAttribute('data-index'));
+
+      if (board[idx] !== "") return;
+
+      makeMove(idx, currentPlayer);
+
+      if (!running) return;
+
+      if (vsComputer && currentPlayer === "O") {
+        computerThinking = true;
+        boardEl.classList.add('disabled');
+        setTimeout(() => {
+          computerMove();
+          computerThinking = false;
+          boardEl.classList.remove('disabled');
+        }, 700);
+      }
+    }
+
+    function makeMove(idx, player) {
+      board[idx] = player;
+      const cell = cells[idx];
+      cell.textContent = player;
+      cell.classList.add('disabled');
+      playSound(soundMove);
+
+      if (checkWinner()) {
+        updateStatus(`Player ${player} wins! 🎉`);
+        highlightWinningCells();
+        playSound(soundWin);
+        running = false;
+      } else if (board.every(cell => cell !== "")) {
+        updateStatus(`It's a draw! 🤝`);
+        playSound(soundDraw);
+        running = false;
+      } else {
+        currentPlayer = (player === "X") ? "O" : "X";
+        updateStatus(`Player ${currentPlayer}'s turn`);
+      }
+    }
+
+    function computerMove() {
+      if (!running) return;
+      const emptyIndices = board.map((v, i) => v === "" ? i : null).filter(v => v !== null);
+
+      // Simple AI: Try to win or block, else random move
+      let move = findBestMove("O") ?? findBestMove("X") ?? emptyIndices[Math.floor(Math.random() * emptyIndices.length)];
+
+      makeMove(move, "O");
+    }
+
+    // Finds index to win/block for given player or null if none
+    function findBestMove(player) {
+      for (const combo of winCombinations) {
+        const marks = combo.map(i => board[i]);
+        if (marks.filter(x => x === player).length === 2 && marks.includes("")) {
+          return combo[marks.indexOf("")];
+        }
+      }
+      return null;
+    }
+
+    function checkWinner() {
+      return winCombinations.some(combination => {
+        const [a, b, c] = combination;
+        return board[a] !== "" && board[a] === board[b] && board[a] === board[c];
+      });
+    }
+
+    function highlightWinningCells() {
+      for (const combination of winCombinations) {
+        const [a, b, c] = combination;
+        if (board[a] !== "" && board[a] === board[b] && board[a] === board[c]) {
+          cells[a].classList.add('winning-cell');
+          cells[b].classList.add('winning-cell');
+          cells[c].classList.add('winning-cell');
+          break;
+        }
+      }
+    }
+
+    function resetGame() {
+      board = ["", "", "", "", "", "", "", "", ""];
+      currentPlayer = "X";
+      running = true;
+      computerThinking = false;
+      vsComputer = document.querySelector('input[name="mode"]:checked').value === 'pvc';
+
+      updateStatus(`Player ${currentPlayer}'s turn`);
+      cells.forEach(cell => {
+        cell.textContent = "";
+        cell.classList.remove('disabled','winning-cell');
+      });
+      boardEl.classList.remove('disabled');
+
+      // For now computer always plays O and moves second. 
+      // You can extend to allow computer first move if desired.
+    }
+
+    cells.forEach(cell => cell.addEventListener('click', handleCellClick));
+    resetBtn.addEventListener('click', resetGame);
+    modeRadios.forEach(radio => {
+      radio.addEventListener('change', () => {
+        resetGame();
+      });
+    });
+
+    // Keyboard accessibility: Enter or space activates cell
+    cells.forEach(cell => {
+      cell.addEventListener('keydown', (e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && !cell.classList.contains('disabled') && !computerThinking) {
+          e.preventDefault();
+          cell.click();
+        }
+      });
+    });
+
+    resetGame();
+  })();
+</script>
+</body>
+</html>
+
